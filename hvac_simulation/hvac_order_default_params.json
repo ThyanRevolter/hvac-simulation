@@ -1,0 +1,29 @@
+{
+    "device": {
+        "current_temp": 68,
+        "last_change_temp": -2,
+        "max_temp": 85,
+        "min_temp": 65,
+        "mode": "heating",
+        "state": "on",
+        "fan_mode": "on",
+        "fan_state": "off", 
+        "power_rating": {
+            "heat": 10.5,
+            "cool": 7.3,
+            "fan": 2
+        },
+        "seconds_since_on_change": 0
+    },
+    "customer": {
+        "K_hvac": 0.1, 
+        "desired_temp": 72
+    },
+    "market": {
+        "expected_stdev": 0,
+        "expected_price": 100,
+        "min_price": 1,
+        "max_price": 2000,
+        "interval": 300
+    }
+}
