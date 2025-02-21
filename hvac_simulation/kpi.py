@@ -108,7 +108,7 @@ class HVAC_KPI:
         return {
             "total_cycles": n_cycles,
             "average_cycles_per_hour": average_cycles_per_hour,
-            "cycles": cycles
+            "cycles": cycles.to_dict(orient="records")
         }
     
     def calculate_temperature_discomfort(self):

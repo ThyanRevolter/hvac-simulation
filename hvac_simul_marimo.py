@@ -17,12 +17,14 @@ def _():
     from hvac_simulation import boptest_suite as bs
     from hvac_simulation.heuristic_order import HVACOrder
     from hvac_simulation.kpi import HVAC_KPI
+    from hvac_simulation.tess_control import TESSControl
 
     BOPTEST_URL = 'http://127.0.0.1'
     return (
         BOPTEST_URL,
         HVACOrder,
         HVAC_KPI,
+        TESSControl,
         bs,
         bt,
         date,
@@ -193,7 +195,8 @@ def _(BOPTEST_URL, bt, control_step, temperature_unit, test_case):
         base_url=BOPTEST_URL,
         testcase=test_case,
         control_step=control_step,
-        temp_unit=temperature_unit
+        temp_unit=temperature_unit,
+        timeout=300
     )
     return (bt_instance,)
 
@@ -262,20 +265,44 @@ def _(
 
 
 @app.cell
+def _(forecast_points, mo):
+    forecast_plot_select = mo.ui.dropdown(
+        dict(zip(forecast_points["Description"], forecast_points.index)),
+        label="Forecast Data Plot"
+    )
+    forecast_plot_select
+    return (forecast_plot_select,)
+
+
+@app.cell
+def _(forecast_data, forecast_plot_select, forecast_points, plt):
+    plt.figure(figsize=(20,5))
+    plt.plot(forecast_data["datetime"], forecast_data[forecast_plot_select.value])
+    plt.ylabel(forecast_points.loc[forecast_plot_select.value, "Description"])
+    return
+
+
+@app.cell
+def _(bt_instance):
+    bt_instance.simulation_results
+    return
+
+
+@app.cell
 def _(HVAC_KPI, bt_instance):
     kpi = HVAC_KPI(bt_instance.simulation_results)
     return (kpi,)
 
 
 @app.cell
-def _(kpi):
-    kpi.calculate_energy_consumption(), kpi.calculate_peak_power(), kpi.calculate_temperature_discomfort(), kpi.calculate_cycles(kpi.heating_power_variable), kpi.calculate_cycles(kpi.cooling_power_variable)
+def _():
+    # kpi.calculate_energy_consumption(), kpi.calculate_peak_power(), kpi.calculate_temperature_discomfort(), kpi.calculate_cycles(kpi.heating_power_variable), kpi.calculate_cycles(kpi.cooling_power_variable)
     return
 
 
 @app.cell
-def _(kpi):
-    kpi.calculate_cycles(kpi.heating_power_variable)
+def _():
+    # kpi.calculate_cycles(kpi.heating_power_variable)
     return
 
 

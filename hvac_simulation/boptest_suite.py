@@ -9,7 +9,7 @@ import numpy as np
 
 KPI_LABELS = {
     "cost_tot": "HVAC energy cost in $/m2 or Euro/m2",
-    "emis_tot": "HVAC energy emissions in kgCO2e/m2",
+    "emis_tot": "HVAC energy emissions in kgCO2e/m2",   
     "ener_tot": "HVAC energy total in kWh/m2",
     "pele_tot": "HVAC peak electrical demand in kW/m2",
     "pgas_tot": "HVAC peak gas demand in kW/m2",
@@ -303,7 +303,7 @@ class BOPTESTClient:
         Returns:
             Dict: Response payload.
         """
-        start_time_sec = int((start_time - self.start_date).total_seconds()) - 3600
+        start_time_sec = int((start_time - self.start_date).total_seconds())
         self.simulation_start_time = start_time
         response = requests.put(
             f"{self.base_url}/initialize/{self.test_id}",
@@ -313,7 +313,8 @@ class BOPTESTClient:
             },
             timeout=self.timeout
         )
-        return self._handle_response(response)
+        self.initialized_output = self._handle_response(response)
+        return self.initialized_output
     
     def get_scenario(self) -> Dict:
         """Get current test scenario."""
@@ -355,6 +356,7 @@ class BOPTESTClient:
         response_data = self._handle_response(response)
         response_data = pd.DataFrame(response_data)
         response_data["datetime"] = response_data["time"].apply(seconds_to_datetime)
+        response_data = self.convert_temperature_variables(response_data)
         return response_data
     
     def advance(self, inputs: Optional[Dict[str, float]] = None) -> Dict:
@@ -405,6 +407,7 @@ class BOPTESTClient:
         temp_variables = (
             list(self.measurements[self.measurements["Unit"] == "K"].index)
             + list(self.inputs[self.inputs["Unit"] == "K"].index)
+            + list(self.forecast_points[self.forecast_points["Unit"] == "K"].index)
         )
         for temp_var in temp_variables:
             if temp_var in sim_results.columns:
@@ -463,7 +466,7 @@ class BOPTESTClient:
             pd.DataFrame: Simulation results.
         """
         num_steps = int(((duration_hours) * 3600) / self.control_step)
-        simulation_results = []
+        simulation_results = [self.initialized_output]
         for i in range(num_steps):
             # datetime of current step
             current_time = self.simulation_start_time + timedelta(seconds=i * self.control_step)
