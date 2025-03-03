@@ -1,11 +1,11 @@
 import marimo
 
-__generated_with = "0.9.20"
+__generated_with = "0.10.17"
 app = marimo.App(width="medium")
 
 
 @app.cell
-def __():
+def _():
     import pandas as pd
     import marimo as mo
     import requests
@@ -29,7 +29,7 @@ def __():
 
 
 @app.cell
-def __(pd):
+def _(pd):
     ami_data = pd.read_csv("ami_data_973_customers.csv")
     number_of_customers = len(ami_data["customer_id"].unique())
     current_year = pd.Timestamp.now().year
@@ -39,7 +39,7 @@ def __(pd):
 
 
 @app.cell
-def __(ami_data, date, mo):
+def _(ami_data, date, mo):
     subset_customers = ami_data["customer_id"].unique()[0:100]
     select_day = mo.ui.date(
         start=date(2025, 1, 1),
@@ -52,20 +52,31 @@ def __(ami_data, date, mo):
 
 
 @app.cell
-def __(ami_data, select_day, subset_customers):
+def _(ami_data, select_day, subset_customers):
     # filter the data for the selected day and the customer subset
     subset_data = ami_data[ami_data["customer_id"].isin(subset_customers) & (ami_data["datetime"].dt.date == select_day.value)]
     return (subset_data,)
 
 
 @app.cell
-def __(batt_addition, hour_agg, hvac_addition, np, plt):
+def _(
+    batt_total_load,
+    hour_agg,
+    hvac_total_load,
+    hvac_total_load_og,
+    np,
+    plt,
+):
+    plt.figure(figsize=(10, 6), dpi=500)
+    plt.plot(hour_agg.index, hour_agg['energy_value'], color="black", linewidth=0.2)
+    plt.plot(hour_agg.index, hvac_total_load, color="black", linewidth=0.2)
+    plt.plot(hour_agg.index, batt_total_load, color="black", linewidth=0.2)
+    plt.plot(hour_agg.index, hvac_total_load_og, color="black", linewidth=0.2, linestyle='--')
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(hour_agg.index, hour_agg['energy_value'], color="black", linewidth=0.5)
     plt.fill_between(hour_agg.index, hour_agg['energy_value'], np.zeros_like(hour_agg['energy_value']), color="red", alpha=0.2)
-    plt.fill_between(hour_agg.index, hour_agg['energy_value'], hour_agg['energy_value'] + hvac_addition, color="blue", alpha=0.2)
-    plt.fill_between(hour_agg.index, hour_agg['energy_value'] + hvac_addition, hour_agg['energy_value'] + hvac_addition + batt_addition, color="green", alpha=0.2)
+    plt.fill_between(hour_agg.index, hour_agg['energy_value'], hvac_total_load, color="blue", alpha=0.2)
+    plt.fill_between(hour_agg.index, hvac_total_load, batt_total_load, color="green", alpha=0.2)
+    plt.fill_between(hour_agg.index, hvac_total_load, hvac_total_load_og , hatch='///', facecolor="white", edgecolors="blue", hatch_linewidth=0.5, alpha=0.2)
 
     plt.xlabel('Hour of Day', fontsize=12)
     plt.ylabel('Energy (kWh)', fontsize=12)
@@ -76,22 +87,41 @@ def __(batt_addition, hour_agg, hvac_addition, np, plt):
 
 
 @app.cell
-def __(np, subset_data):
+def _(np, subset_data):
     hour_agg = subset_data.groupby('hour_id').agg({'energy_value': 'sum'})
     hvac_addition = np.random.normal(500, 100, size=hour_agg.shape[0])
     # smooth the hvac addition data using convolution
     hvac_addition = np.convolve(hvac_addition, np.ones(5)/5, mode='same')
+    hvac_addition_og = np.copy(hvac_addition)
+    hvac_total_load_og = hour_agg['energy_value'] + hvac_addition_og
+
     hvac_addition[18:21] = hvac_addition[18:21]/5
+    hvac_addition[hvac_addition<0] = 0
+
+    hvac_total_load = hour_agg['energy_value'] + hvac_addition
+    hvac_total_load[hvac_total_load >= 5000] = 5000
+    hvac_total_load[18:21] = 5000
 
     # battery addition only on during from 9am to 3pm
 
     batt_addition = np.zeros_like(hour_agg['energy_value'])
     batt_addition[9:15] = np.random.normal(200, 50, 6)
-    return batt_addition, hour_agg, hvac_addition
+    batt_addition[batt_addition<0] = 0
+
+    batt_total_load = hvac_total_load + batt_addition
+    return (
+        batt_addition,
+        batt_total_load,
+        hour_agg,
+        hvac_addition,
+        hvac_addition_og,
+        hvac_total_load,
+        hvac_total_load_og,
+    )
 
 
 @app.cell
-def __(json, requests):
+def _(json, requests):
     auction_url = "https://i74x56i74zlaxwfbb5keaxt4ne0joclv.lambda-url.us-east-1.on.aws"
 
     auction_payload = json.dumps({
@@ -152,7 +182,7 @@ def __(json, requests):
 
 
 @app.cell
-def __(headers, json, requests):
+def _(headers, json, requests):
     bidding_url = "https://xmjr5rlkezflcg2f2drq2zu36q0uisvg.lambda-url.us-east-1.on.aws/multibid"
 
     bidding_payload = json.dumps({
@@ -224,7 +254,7 @@ def __(headers, json, requests):
 
 
 @app.cell
-def __(auction_url, bidding_url, headers, json, random, requests):
+def _(auction_url, bidding_url, headers, json, random, requests):
     # Number of payloads to generate
     num_payloads = 5
 

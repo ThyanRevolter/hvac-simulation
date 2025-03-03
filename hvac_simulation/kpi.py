@@ -13,9 +13,10 @@ class HVAC_KPI:
     def __init__(
             self,
             hvac_operation_data,
-            heating_power_variable = "fcu_reaPHea_y",
-            cooling_power_variable = "fcu_reaPCoo_y",
-            temperature_variable = "zon_reaTRooAir_y",
+            control_step, # control step in seconds
+            heating_power_variable = None,
+            cooling_power_variable = None,
+            temperature_variable = None,
             setpoint_temperature = 22.0,
             temperature_unit = "C"
         ):
@@ -31,6 +32,7 @@ class HVAC_KPI:
         self.temperature_variable = temperature_variable
         self.setpoint_temperature = setpoint_temperature
         self.temperature_unit = temperature_unit
+        self.time_resolution = control_step # control step in seconds
 
 
     def calculate_energy_consumption(self):
@@ -40,10 +42,18 @@ class HVAC_KPI:
         Returns:
         float: Total energy consumption in kWh
         """
+        if self.heating_power_variable is None:
+            if self.cooling_power_variable is None:
+                return 0            
+            return self.hvac_operation_data[self.cooling_power_variable].sum() * self.time_resolution / 3600
+        if self.cooling_power_variable is None:
+            if self.heating_power_variable is None:
+                return 0
+            return self.hvac_operation_data[self.heating_power_variable].sum() * self.time_resolution / 3600
         return (
             self.hvac_operation_data[self.heating_power_variable].sum()
             + self.hvac_operation_data[self.cooling_power_variable].sum()
-        )
+        ) * self.time_resolution / 3600
     
     def calculate_peak_power(self):
         """
@@ -52,6 +62,14 @@ class HVAC_KPI:
         Returns:
         float: Peak power consumption in kW
         """
+        if self.heating_power_variable is None:
+            if self.cooling_power_variable is None:
+                return 0
+            return self.hvac_operation_data[self.cooling_power_variable].max()
+        if self.cooling_power_variable is None:
+            if self.heating_power_variable is None:
+                return 0
+            return self.hvac_operation_data[self.heating_power_variable].max()
         return max(
             self.hvac_operation_data[self.heating_power_variable].max(),
             self.hvac_operation_data[self.cooling_power_variable].max()
@@ -118,6 +136,8 @@ class HVAC_KPI:
         Returns:
         float: Average temperature discomfort in degrees Celsius
         """
+        if self.temperature_variable is None:
+            return 0
         return np.linalg.norm(
             self.hvac_operation_data[self.temperature_variable] - self.setpoint_temperature
         ) / np.sqrt(len(self.hvac_operation_data))

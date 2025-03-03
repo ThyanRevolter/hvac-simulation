@@ -103,3 +103,6 @@ ENV/
 
 # IDE settings
 .vscode/
+
+# large data files
+ami_data_973*.csv

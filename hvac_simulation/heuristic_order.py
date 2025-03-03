@@ -464,9 +464,9 @@ class HVACOrder(Order):
         # add auxiliary power either for heating or seperate
         q_fan = power_rating['fan'] if fan_state == 'on' else 0
         if mode == 'heating' or (mode == 'auto' and last_change_temp < 0):
-            q_order = power_rating['heat']
+            q_order = power_rating['heating']
         elif mode == 'cooling' or (mode == 'auto' and last_change_temp > 0):
-            q_order = power_rating['cool']
+            q_order = power_rating['cooling']
         return q_order + q_fan
 
 class BatteryOrder(Order):
