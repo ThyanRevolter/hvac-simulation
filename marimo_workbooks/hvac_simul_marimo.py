@@ -13,9 +13,9 @@ def _():
     import matplotlib.pyplot as plt
     from datetime import datetime, timedelta, date
 
-    from hvac_simulation.boptest_suite import BOPTESTClient as bt
-    from hvac_simulation import boptest_suite as bs
-    from hvac_simulation.heuristic_order import HVACOrder
+    from hvac_simulation.boptest.boptest_suite import BOPTESTClient as bt
+    from hvac_simulation.boptest import boptest_suite as bs
+    from hvac_simulation.bidding_strategy.heuristic_order import HVACOrder
     from hvac_simulation.kpi import HVAC_KPI
     from hvac_simulation.tess_control import TESSControl
 
@@ -268,6 +268,7 @@ def _(
 def _(forecast_points, mo):
     forecast_plot_select = mo.ui.dropdown(
         dict(zip(forecast_points["Description"], forecast_points.index)),
+        value=forecast_points["Description"][0],
         label="Forecast Data Plot"
     )
     forecast_plot_select
@@ -377,6 +378,12 @@ def _(
 def _():
     import numpy as np
     return (np,)
+
+
+@app.cell
+def _(bt_instance):
+    bt_instance.get_kpis().to_dict()["Value"]
+    return
 
 
 @app.cell

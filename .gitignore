@@ -106,3 +106,9 @@ ENV/
 
 # large data files
 ami_data_973*.csv
+
+# data files
+data/*
+
+# local files
+local/*

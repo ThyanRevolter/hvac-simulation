@@ -1,9 +1,10 @@
 [tool.poetry]
 name = "hvac-simulation"
 version = "0.1.0"
-description = ""
+description = "HVAC simulation package"
 authors = ["Adhithyan Sakthivelu <admkr.2010@gmail.com>"]
-readme = "README.md"
+readme = "README.rst"
+packages = [{include = "hvac_simulation"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"

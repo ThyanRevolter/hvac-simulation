@@ -3,6 +3,7 @@ This module contains the class to calculate KPIs for HVAC system performance ove
 """
 import numpy as np
 import pandas as pd
+import logging
 
 
 class HVAC_KPI:
@@ -18,13 +19,21 @@ class HVAC_KPI:
             cooling_power_variable = None,
             temperature_variable = None,
             setpoint_temperature = 22.0,
-            temperature_unit = "C"
+            temperature_unit = "C",
+            logger = None
         ):
         """
         Initialize the KPI class with the data
 
         Args:   
         hvac_operation_data (pandas.DataFrame): Dataframe containing the HVAC operation data
+        control_step (int): Control step in seconds
+        heating_power_variable (str): Name of the heating power variable
+        cooling_power_variable (str): Name of the cooling power variable
+        temperature_variable (str): Name of the temperature variable
+        setpoint_temperature (float): Setpoint temperature
+        temperature_unit (str): Temperature unit (C, F, K)
+        logger (logging.Logger): Logger object for logging debug information
         """
         self.hvac_operation_data = hvac_operation_data
         self.heating_power_variable = heating_power_variable
@@ -33,6 +42,7 @@ class HVAC_KPI:
         self.setpoint_temperature = setpoint_temperature
         self.temperature_unit = temperature_unit
         self.time_resolution = control_step # control step in seconds
+        self.logger = logger or logging.getLogger('hvac_simulation')
 
 
     def calculate_energy_consumption(self):
@@ -88,24 +98,46 @@ class HVAC_KPI:
 
         self.hvac_operation_data["stage_change"] = self.hvac_operation_data["state"].diff()
 
+        # Log debug information
+        self.logger.debug(f"Stage changes:\n{self.hvac_operation_data['stage_change']}")
+
         # indices where state changes from 0->1 and 1->0
         cycle_start = self.hvac_operation_data[self.hvac_operation_data["stage_change"] == 1].index
         cycle_end = self.hvac_operation_data[self.hvac_operation_data["stage_change"] == -1].index
 
+        # Log debug information
+        self.logger.debug(f"Cycle start indices: {cycle_start}")
+        self.logger.debug(f"Cycle end indices: {cycle_end}")
+
         # edge cases
         if len(cycle_start) == 0 or len(cycle_end) == 0:
-            return 0
+            self.logger.debug("No cycles found - empty cycle arrays")
+            return {
+                "total_cycles": 0,
+                "average_cycles_per_hour": 0,
+                "cycles": []
+            }
         
         # if HVAC starts in heating mode, remove the first cycle start
-        if cycle_end[0] < cycle_start[0]:
+        if len(cycle_end) > 0 and len(cycle_start) > 0 and cycle_end[0] < cycle_start[0]:
+            self.logger.debug("Removing first cycle end - HVAC started in heating mode")
             cycle_end = cycle_end[1:]
         
         # if HVAC ends in heating mode, remove the last cycle end
-        if cycle_start[-1] > cycle_end[-1]:
+        if len(cycle_start) > 0 and len(cycle_end) > 0 and cycle_start[-1] > cycle_end[-1]:
+            self.logger.debug("Removing last cycle start - HVAC ended in heating mode")
             cycle_start = cycle_start[:-1]
 
         # ensure equal number of cycle starts and ends
         n_cycles = min(len(cycle_start), len(cycle_end))
+        if n_cycles == 0:
+            self.logger.debug("No valid cycles found after processing")
+            return {
+                "total_cycles": 0,
+                "average_cycles_per_hour": 0,
+                "cycles": []
+            }
+            
         cycle_start = cycle_start[:n_cycles]
         cycle_end = cycle_end[:n_cycles]
 
@@ -122,6 +154,11 @@ class HVAC_KPI:
             self.hvac_operation_data["datetime"].iloc[-1] - self.hvac_operation_data["datetime"].iloc[0]
         ).total_seconds() / 3600
         average_cycles_per_hour = n_cycles / total_hours if total_hours > 0 else 0
+
+        self.logger.debug(f"Cycle analysis complete:")
+        self.logger.debug(f"Total cycles: {n_cycles}")
+        self.logger.debug(f"Average cycles per hour: {average_cycles_per_hour:.2f}")
+        self.logger.debug(f"Cycle durations (minutes):\n{cycles['duration_minutes']}")
 
         return {
             "total_cycles": n_cycles,

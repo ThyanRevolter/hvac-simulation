@@ -400,38 +400,80 @@ class HVACOrder(Order):
         fan_mode = self.device_parameters['fan_mode']
         fan_state = self.device_parameters['fan_state']
         power_rating = self.device_parameters['power_rating']
-        seconds_since_on_change = self.device_parameters['seconds_since_on_change']
+        
+        # seconds_since_on_change = self.device_parameters['seconds_since_on_change']
 
         
-        # make sure the device is on for at least 15 minutes before bidding
-        if state!="off" and seconds_since_on_change < 20*60:
-            return max_price
+        # # make sure the device is on for at least 15 minutes before bidding
+        # if state!="off" and seconds_since_on_change < 20*60:
+        #     return max_price
+        # print("\n" + "="*50)
+        # print("BID PRICE CALCULATION DEBUG")
+        # print("="*50)
+        # print(f"Mode: {mode}")
+        # print(f"State: {state}")
+        # print(f"Current Temperature: {current_temp:.2f}°F")
+        # print(f"Desired Temperature: {desired_temp:.2f}°F")
+        # print(f"Temperature Range: {min_temp:.2f}°F to {max_temp:.2f}°F")
+        # print(f"Last Temperature Change: {last_change_temp:.2f}°F")
+        # print(f"Market Parameters:")
+        # print(f"  - Expected Price: ${expected_price:.2f}")
+        # print(f"  - Expected Std Dev: ${expected_stdev:.2f}")
+        # print(f"  - Min Price: ${min_price:.2f}")
+        # print(f"  - Max Price: ${max_price:.2f}")
+        # print(f"Customer Parameter:")
+        # print(f"  - K_hvac: {K_hvac:.2f}")
         
         if expected_stdev == 0:
             expected_stdev = expected_price*0.001
+            print(f"Warning: Expected std dev was 0, adjusted to: ${expected_stdev:.2f}")
+        
         p_order = 0
         if mode == 'heating' or (mode == 'auto' and last_change_temp < 0):
+            # print("\nCalculating heating mode bid price...")
             if current_temp < min_temp:
                 p_order = max_price
+                # print(f"Temperature below minimum ({min_temp:.2f}°F), using max price: ${p_order:.2f}")
             elif current_temp > max_temp:
                 p_order = min_price
-            elif (current_temp > desired_temp) or (current_temp < desired_temp):
+                # print(f"Temperature above maximum ({max_temp:.2f}°F), using min price: ${p_order:.2f}")
+            elif (current_temp != desired_temp):
+                temp_delta = desired_temp - current_temp
+                temp_range = abs(min_temp - desired_temp)
+                price_adjustment = K_hvac * expected_stdev * (temp_delta/temp_range)
                 p_order = min(
                     max(
-                        expected_price + K_hvac * expected_stdev * ((desired_temp - current_temp)/abs(min_temp - desired_temp)),
+                        expected_price + price_adjustment,
                         min_price),
                     max_price)
+                # print(f"Temperature delta: {temp_delta:.2f}°F")
+                # print(f"Temperature range: {temp_range:.2f}°F")
+                # print(f"Price adjustment: ${price_adjustment:.2f}")
+                # print(f"Final bid price: ${p_order:.2f}")
+                
         elif mode == 'cooling' or (mode == 'auto' and last_change_temp > 0):
+            # print("\nCalculating cooling mode bid price...")
             if current_temp < min_temp:
                 p_order = min_price
+                # print(f"Temperature below minimum ({min_temp:.2f}°F), using min price: ${p_order:.2f}")
             elif current_temp > max_temp:
                 p_order = max_price
-            elif (current_temp > desired_temp) or (current_temp < desired_temp):
+                # print(f"Temperature above maximum ({max_temp:.2f}°F), using max price: ${p_order:.2f}")
+            elif (current_temp != desired_temp):
+                temp_delta = current_temp - desired_temp
+                temp_range = abs(max_temp - desired_temp)
+                price_adjustment = K_hvac * expected_stdev * (temp_delta/temp_range)
                 p_order = min(
                     max(
-                        expected_price + K_hvac * expected_stdev * ((current_temp - desired_temp)/abs(max_temp - desired_temp)), 
+                        expected_price + price_adjustment,
                         min_price),
                     max_price)
+                # print(f"Temperature delta: {temp_delta:.2f}°F")
+                # print(f"Temperature range: {temp_range:.2f}°F")
+                # print(f"Price adjustment: ${price_adjustment:.2f}")
+                # print(f"Final bid price: ${p_order:.2f}")
+        
+        # print("="*50 + "\n")
         return p_order
 
     def get_power_quantity(self) -> float:
