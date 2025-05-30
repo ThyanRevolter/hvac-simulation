@@ -64,18 +64,19 @@ The simulation uses several key parameters that can be configured:
 
 **Test Case Parameters** (in `tess_experiment.py`):
 
-\- BOPTEST Parameters: .. code-block:: python
+- BOPTEST Parameters: 
 
-> 
->
-> test_case_parameters = {
->
-> :   \"test_case\": \"bestest_hydronic_heat_pump\", \"start_date\":
->     \"2023-01-07\", \"number_of_days\": 5, \"temperature_unit\":
->     \"F\", \"control_step\": 900, \# 15 minutes in seconds
->     \"warmup_days\": 1,
->
-> }
+``` python
+
+test_case_parameters = {
+    "test_case": "bestest_hydronic_heat_pump",
+    "start_date": "2023-01-07",
+    "number_of_days": 5,
+    "temperature_unit": "F",
+    "control_step": 900,  # 15 minutes in seconds
+    "warmup_days": 1
+}
+```
 
 **Customer Parameters**:
 
