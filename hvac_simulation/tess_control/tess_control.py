@@ -8,7 +8,7 @@ import numpy as np
 from hvac_simulation.bidding_strategy.heuristic_order import HVACOrder
 from hvac_simulation.boptest.boptest_suite import BOPTESTClient as bp
 from hvac_simulation.boptest.boptest_suite import seconds_to_datetime
-from hvac_simulation.kpi import HVAC_KPI
+from hvac_simulation.tess_control.kpi import HVAC_KPI
 
 
 class TESSControl:
@@ -42,7 +42,7 @@ class TESSControl:
         ) -> None:
         """Initialize TESS Control with BOPTEST parameters."""
         self.bt_instance = bp(**boptest_parms) if boptest_parms else bt_instance
-        self.hvac_order = HVACOrder()
+        self.hvac_order = HVACOrder(auction_id="linear_hvac_auction")
         self.current_price = None
         self.current_power = None
         self.kpi_calculator = None
@@ -260,7 +260,7 @@ class TESSControl:
         results = [
             {
                 "timestamp": self.start_time,
-                "temperature": self.initial_state["reaTZon_y"],
+                "temperature": self.initial_state["zon_reaTRooAir_y"],
                 "power": 0,
                 "price": market_cleared_price[0],
                 "setpoint": self.hvac_order.customer_parameters.get('desired_temp', None)
@@ -269,15 +269,17 @@ class TESSControl:
         
         for period in range(num_market_periods):
             current_state = states_list[-1]
-            current_temp = current_state["reaTZon_y"]
+            current_temp = current_state["zon_reaTRooAir_y"]
             # convert K to unit in BOPTEST
             current_temp = self.bt_instance.convert_temperature_value(current_temp)
 
-            fan_power = current_state["reaPFan_y"]
-            if current_temp < self.hvac_order.customer_parameters.get('desired_temp', None):
+            fan_power = current_state["fcu_reaPFan_y"]
+            if current_temp < self.hvac_order.customer_parameters.get('desired_temp', None) - 1:
                 mode_to_be = "heating"
-            else:
+            elif current_temp > self.hvac_order.customer_parameters.get('desired_temp', None) + 1:
                 mode_to_be = "cooling"
+            else:
+                mode_to_be = "off"  # Temperature within deadband
             fan_mode = "auto"
             fan_state = "on" if fan_power > 0 else "off"
             power_rating = {'cooling': 1000, 'heating': 1000, 'fan': 100}  # Example values
@@ -326,6 +328,9 @@ class TESSControl:
 
             
             control_input = self.get_hvac_setpoint_control_input_dr(mode=mode)
+            print(f"current_temp: {current_temp} and time: {self.start_time + timedelta(seconds=(period+1) * self.market_interval)}")
+            print(f"mode: {mode}")
+            print(f"control_input: {control_input}")
             new_state = self.bt_instance.advance(control_input)
             control_input["mode"] = mode
             states_list.append(new_state)

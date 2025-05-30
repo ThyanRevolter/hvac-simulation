@@ -9,8 +9,8 @@ import os
 import glob
 
 from hvac_simulation.boptest.boptest_suite import BOPTESTClient as bt
-from hvac_simulation.kpi import HVAC_KPI
-from hvac_simulation.tess_control import TESSControl
+from hvac_simulation.tess_control.kpi import HVAC_KPI
+from hvac_simulation.tess_control.tess_control import TESSControl
 from hvac_simulation.utils.logger import setup_logger
 
 def print_elapsed_time(start_time, description, logger):

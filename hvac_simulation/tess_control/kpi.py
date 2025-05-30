@@ -98,16 +98,11 @@ class HVAC_KPI:
 
         self.hvac_operation_data["stage_change"] = self.hvac_operation_data["state"].diff()
 
-        # Log debug information
-        self.logger.debug(f"Stage changes:\n{self.hvac_operation_data['stage_change']}")
 
         # indices where state changes from 0->1 and 1->0
         cycle_start = self.hvac_operation_data[self.hvac_operation_data["stage_change"] == 1].index
         cycle_end = self.hvac_operation_data[self.hvac_operation_data["stage_change"] == -1].index
 
-        # Log debug information
-        self.logger.debug(f"Cycle start indices: {cycle_start}")
-        self.logger.debug(f"Cycle end indices: {cycle_end}")
 
         # edge cases
         if len(cycle_start) == 0 or len(cycle_end) == 0:
@@ -120,12 +115,10 @@ class HVAC_KPI:
         
         # if HVAC starts in heating mode, remove the first cycle start
         if len(cycle_end) > 0 and len(cycle_start) > 0 and cycle_end[0] < cycle_start[0]:
-            self.logger.debug("Removing first cycle end - HVAC started in heating mode")
             cycle_end = cycle_end[1:]
         
         # if HVAC ends in heating mode, remove the last cycle end
         if len(cycle_start) > 0 and len(cycle_end) > 0 and cycle_start[-1] > cycle_end[-1]:
-            self.logger.debug("Removing last cycle start - HVAC ended in heating mode")
             cycle_start = cycle_start[:-1]
 
         # ensure equal number of cycle starts and ends
@@ -155,10 +148,6 @@ class HVAC_KPI:
         ).total_seconds() / 3600
         average_cycles_per_hour = n_cycles / total_hours if total_hours > 0 else 0
 
-        self.logger.debug(f"Cycle analysis complete:")
-        self.logger.debug(f"Total cycles: {n_cycles}")
-        self.logger.debug(f"Average cycles per hour: {average_cycles_per_hour:.2f}")
-        self.logger.debug(f"Cycle durations (minutes):\n{cycles['duration_minutes']}")
 
         return {
             "total_cycles": n_cycles,

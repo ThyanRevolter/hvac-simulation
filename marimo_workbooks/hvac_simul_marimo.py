@@ -16,8 +16,8 @@ def _():
     from hvac_simulation.boptest.boptest_suite import BOPTESTClient as bt
     from hvac_simulation.boptest import boptest_suite as bs
     from hvac_simulation.bidding_strategy.heuristic_order import HVACOrder
-    from hvac_simulation.kpi import HVAC_KPI
-    from hvac_simulation.tess_control import TESSControl
+    from hvac_simulation.tess_control.kpi import HVAC_KPI
+    from hvac_simulation.tess_control.tess_control import TESSControl
 
     BOPTEST_URL = 'http://127.0.0.1'
     return (

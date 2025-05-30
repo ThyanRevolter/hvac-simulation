@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.9.20"
+__generated_with = "0.10.19"
 app = marimo.App(width="medium")
 
 
@@ -17,8 +17,8 @@ def _():
     from hvac_simulation.boptest.boptest_suite import BOPTESTClient as bt
     from hvac_simulation.boptest import boptest_suite as bs
     from hvac_simulation.bidding_strategy.heuristic_order import HVACOrder
-    from hvac_simulation.kpi import HVAC_KPI
-    from hvac_simulation.tess_control import TESSControl
+    from hvac_simulation.tess_control.kpi import HVAC_KPI
+    from hvac_simulation.tess_control.tess_control import TESSControl
 
     BOPTEST_URL = 'http://127.0.0.1'
     return (
@@ -185,7 +185,7 @@ def _(
     warmup_days,
 ):
     customer_parameters = {
-            "K_hvac": 0.1, #K_hvac.value,
+            "K_hvac": 3, #K_hvac.value,
             "desired_temp": 70 #desired_soc.value
     }
     market_parameters  = {
@@ -207,9 +207,9 @@ def _(
         duration_hours=simul_hours,
         warmup_period=warmup_days*24,
         market_interval=control_step,
-        avaialble_control_inputs=["oveHeaPumY_activate", "oveHeaPumY_u", "oveTSet_u", "oveTSet_activate"],
-        control_default_values=[0, None, 294.261, 1],
-        control_dr_values=[1, 0, 0, None]
+        # avaialble_control_inputs=["oveHeaPumY_activate", "oveHeaPumY_u", "oveTSet_u", "oveTSet_activate"],
+        # control_default_values=[0, 0, 294.261, 1],
+        # control_dr_values=[1, 0, 0, None]
     )
     tess_simul.set_hvac_customer_parameters(customer_parameters)
     tess_simul.set_hvac_market_parameters(market_parameters)
@@ -272,15 +272,10 @@ def _(
 
 
 @app.cell
-def _(
-    market_cleared_price,
-    market_expected_mean_price,
-    market_expected_std_price,
-    tess_simul,
-):
+def _(market_cleared_price, market_expected_mean_price, tess_simul):
     simul_result = tess_simul.run_tess_simulation(
         market_expected_mean_price,
-        market_expected_std_price,
+        market_expected_mean_price,
         market_cleared_price
     )
     return (simul_result,)
