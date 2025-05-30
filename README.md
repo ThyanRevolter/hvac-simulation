@@ -6,25 +6,14 @@
 
 [![Documentation Status](https://readthedocs.org/projects/hvac-simulation/badge/?version=latest)](https://hvac-simulation.readthedocs.io/en/latest/?badge=latest)
 
+# HVAC Simulation with TESS Control
+
 This project simulates the behavior of HVAC (Heating, Ventilation, and
 Air Conditioning) systems to optimize energy consumption and maintain
 desired indoor climate conditions.
 
 - Free software: MIT
-- Documentation: <https://hvac-simulation.readthedocs.io>.
-
-## Features
-
-- TODO
-
-## Credits
-
-This package was created with
-[Cookiecutter](https://github.com/audreyr/cookiecutter) and the
-[briggySmalls/cookiecutter-pypackage](https://github.com/briggySmalls/cookiecutter-pypackage)
-project template.
-
-# HVAC Simulation with TESS Control
+- Documentation: <https://hvac-simulation.readthedocs.io>
 
 ### How to Run the Simulation
 
@@ -64,18 +53,18 @@ The simulation uses several key parameters that can be configured:
 
 **Test Case Parameters** (in `tess_experiment.py`):
 
-\- BOPTEST Parameters: .. code-block:: python
+\- BOPTEST Parameters: 
 
-> 
->
-> test_case_parameters = {
->
-> :   \"test_case\": \"bestest_hydronic_heat_pump\", \"start_date\":
->     \"2023-01-07\", \"number_of_days\": 5, \"temperature_unit\":
->     \"F\", \"control_step\": 900, \# 15 minutes in seconds
->     \"warmup_days\": 1,
->
-> }
+``` python
+test_case_parameters = {
+    "test_case": "bestest_hydronic_heat_pump",
+    "start_date": "2023-01-07",
+    "number_of_days": 5,
+    "temperature_unit": "F",
+    "control_step": 900,  # 15 minutes in seconds
+    "warmup_days": 1
+}
+```
 
 **Customer Parameters**:
 
@@ -296,3 +285,15 @@ For issues and questions:
       documentation](https://ibpsa.github.io/project1-boptest/)
     - Docker Issues: Check Docker Desktop status and restart if
       necessary
+
+
+## Features
+
+- TODO
+
+## Credits
+
+This package was created with
+[Cookiecutter](https://github.com/audreyr/cookiecutter) and the
+[briggySmalls/cookiecutter-pypackage](https://github.com/briggySmalls/cookiecutter-pypackage)
+project template.
