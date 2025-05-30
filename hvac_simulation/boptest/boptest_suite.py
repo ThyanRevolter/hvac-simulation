@@ -348,7 +348,7 @@ class BOPTESTClient:
             f"{self.base_url}/forecast/{self.test_id}",
             data={
                 'point_names': self.forecast_points.index.tolist(),
-                'horizon': horizon_hours*3600,
+                'horizon': horizon_hours*3600 - interval,
                 'interval': interval
             },
             timeout=self.timeout

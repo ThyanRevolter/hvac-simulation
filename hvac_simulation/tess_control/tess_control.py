@@ -5,10 +5,10 @@ import pandas as pd
 from datetime import datetime, timedelta
 import numpy as np
 
-from hvac_simulation.heuristic_order import HVACOrder
-from hvac_simulation.boptest_suite import BOPTESTClient as bp
-from hvac_simulation.boptest_suite import seconds_to_datetime
-from hvac_simulation.kpi import HVAC_KPI
+from hvac_simulation.bidding_strategy.heuristic_order import HVACOrder
+from hvac_simulation.boptest.boptest_suite import BOPTESTClient as bp
+from hvac_simulation.boptest.boptest_suite import seconds_to_datetime
+from hvac_simulation.tess_control.kpi import HVAC_KPI
 
 
 class TESSControl:
@@ -42,7 +42,7 @@ class TESSControl:
         ) -> None:
         """Initialize TESS Control with BOPTEST parameters."""
         self.bt_instance = bp(**boptest_parms) if boptest_parms else bt_instance
-        self.hvac_order = HVACOrder()
+        self.hvac_order = HVACOrder(auction_id="linear_hvac_auction")
         self.current_price = None
         self.current_power = None
         self.kpi_calculator = None
@@ -160,31 +160,30 @@ class TESSControl:
             Temperature setpoint in the unit specified in BOPTEST client
         """
         if mode == "cooling":
-            control_input = {
+            return {
                 'con_oveTSetCoo_u': (self.hvac_order.customer_parameters.get('desired_temp', None) - 32)*(5/9) + 273.15, # F to K
-                # 'con_oveTSetCoo_u': 308.15,
                 'con_oveTSetCoo_activate': 1,
                 'con_oveTSetHea_u': 278.15,
                 'con_oveTSetHea_activate': 1
             }
-        elif mode == "heating":
-            control_input = {
+        if mode == "heating":
+            return {
                 'con_oveTSetHea_u': (self.hvac_order.customer_parameters.get('desired_temp', None) - 32)*(5/9) + 273.15,
-                # 'con_oveTSetHea_u': 278.15,
                 'con_oveTSetHea_activate': 1,
                 'con_oveTSetCoo_u': 308.15,
                 'con_oveTSetCoo_activate': 1
             }
-        elif mode == "off":
-            control_input = {
+        if mode == "off":
+            return {
                 'con_oveTSetHea_u': 278.15,
                 'con_oveTSetHea_activate': 1,
                 'con_oveTSetCoo_u': 308.15,
                 'con_oveTSetCoo_activate': 1
             }
-        elif mode == "default":
-            control_input = None
-        return control_input
+        if mode == "default":
+            return None
+        raise ValueError(f"Invalid mode: {mode}")
+
 
     def get_hvac_setpoint_control_input_dr(self, mode="off"):
         control_input = {}
@@ -248,38 +247,43 @@ class TESSControl:
         controls_list[0]["mode"] = "off"
 
         # Calculate number of market periods
-        num_market_periods = int((self.duration_hours * 3600) / self.market_interval)
+        num_market_periods = int((self.duration_hours * 3600) / self.market_interval) - 1
 
-        if market_expected_mean_price.shape[0] != num_market_periods:
+        if market_expected_mean_price.shape[0] != num_market_periods + 1:
             raise ValueError("Market price data must match the number of market periods")
-        if market_expected_std_price.shape[0] != num_market_periods:
+        if market_expected_std_price.shape[0] != num_market_periods + 1:
             raise ValueError("Market price data must match the number of market periods")
-        if market_cleared_price.shape[0] != num_market_periods:
+        if market_cleared_price.shape[0] != num_market_periods + 1:
             raise ValueError("Market price data must match the number of market periods")
         
         # Storage for results
-        results = []
+        results = [
+            {
+                "timestamp": self.start_time,
+                "temperature": self.initial_state["zon_reaTRooAir_y"],
+                "power": 0,
+                "price": market_cleared_price[0],
+                "setpoint": self.hvac_order.customer_parameters.get('desired_temp', None)
+            }
+        ]
         
         for period in range(num_market_periods):
-            print(f"Running period {period+1} of {num_market_periods}")
             current_state = states_list[-1]
-            current_temp = current_state["reaTZon_y"]
+            current_temp = current_state["zon_reaTRooAir_y"]
             # convert K to unit in BOPTEST
             current_temp = self.bt_instance.convert_temperature_value(current_temp)
 
-            fan_power = current_state["reaPFan_y"]
-            print(f"current_temp: {current_temp} and desired_temp: {self.hvac_order.customer_parameters.get('desired_temp', None)}")
-            if current_temp < self.hvac_order.customer_parameters.get('desired_temp', None):
-                print("setting mode to heating")
+            fan_power = current_state["fcu_reaPFan_y"]
+            if current_temp < self.hvac_order.customer_parameters.get('desired_temp', None) - 1:
                 mode_to_be = "heating"
-            else:
-                print("setting mode to cooling")
+            elif current_temp > self.hvac_order.customer_parameters.get('desired_temp', None) + 1:
                 mode_to_be = "cooling"
+            else:
+                mode_to_be = "off"  # Temperature within deadband
             fan_mode = "auto"
             fan_state = "on" if fan_power > 0 else "off"
             power_rating = {'cooling': 1000, 'heating': 1000, 'fan': 100}  # Example values
             seconds_since_on_change = self.seconds_since_last_on_change(controls_list)
-            print("seconds_since_on_change: ", seconds_since_on_change)
             # Update device parameters with current state
             device_params = {
                 'current_temp': current_temp,
@@ -294,18 +298,17 @@ class TESSControl:
                 'seconds_since_on_change': seconds_since_on_change
             }
             self.set_hvac_device_parameters(device_params)
-            self.hvac_order.market_parameters["expected_price"] = market_expected_mean_price[period]
-            self.hvac_order.market_parameters["expected_stdev"] = market_expected_std_price[period]
+            self.hvac_order.market_parameters["expected_price"] = market_expected_mean_price[period+1]
+            self.hvac_order.market_parameters["expected_stdev"] = market_expected_std_price[period+1]
             
             # Get HVAC order
             price, quantity = self.get_hvac_order()
-            print("price: ", price, "market_cleared_price: ", market_cleared_price[period], "in the money?: ", price >= market_cleared_price[period])
             
             # when K value and std deviation is zero then there is no point of flexibly running the hvac system and set the temp to the desired temp
             
             # Store results
             result = {
-                'timestamp': self.start_time + timedelta(seconds=period * self.market_interval),
+                'timestamp': self.start_time + timedelta(seconds=(period+1) * self.market_interval),
                 'temperature': device_params['current_temp'],
                 'power': quantity if quantity > 0 else 0,
                 'price': price,
@@ -316,21 +319,20 @@ class TESSControl:
             run=False
             
             # Apply control based on market clearing
-            if price >= market_cleared_price[period]:
+            if price >= market_cleared_price[period+1]:
                 run=True
                 mode = "cooling" if mode_to_be == "cooling" else "heating"
-                print("----------------Running HVAC system-----------------")
-                print("device_params: ", device_params['mode'])
             else:
-                print("---------------HVAC system is off-------------------")
                 mode = "off"
                 device_params['mode'] = "off"
 
             
             control_input = self.get_hvac_setpoint_control_input_dr(mode=mode)
+            print(f"current_temp: {current_temp} and time: {self.start_time + timedelta(seconds=(period+1) * self.market_interval)}")
+            print(f"mode: {mode}")
+            print(f"control_input: {control_input}")
             new_state = self.bt_instance.advance(control_input)
             control_input["mode"] = mode
-            print("control_input: ", control_input)
             states_list.append(new_state)
             controls_list.append(control_input)
         
@@ -339,7 +341,10 @@ class TESSControl:
         self.simulation_results["datetime"] = self.simulation_results['time'].apply(seconds_to_datetime)
         self.control_list = pd.DataFrame(controls_list)
         self.control_list["datetime"] = self.simulation_results["datetime"]
+        self.tess_results = pd.DataFrame(results)
+        self.tess_results["datetime"] = self.tess_results["timestamp"]
         return self.simulation_results
+    
 
     def get_simulation_kpis(self) -> Dict[str, float]:
         """

@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.10.17"
+__generated_with = "0.10.19"
 app = marimo.App(width="medium")
 
 
@@ -14,11 +14,11 @@ def _():
     from datetime import datetime, timedelta, date
     import numpy as np
 
-    from hvac_simulation.boptest_suite import BOPTESTClient as bt
-    from hvac_simulation import boptest_suite as bs
-    from hvac_simulation.heuristic_order import HVACOrder
-    from hvac_simulation.kpi import HVAC_KPI
-    from hvac_simulation.tess_control import TESSControl
+    from hvac_simulation.boptest.boptest_suite import BOPTESTClient as bt
+    from hvac_simulation.boptest import boptest_suite as bs
+    from hvac_simulation.bidding_strategy.heuristic_order import HVACOrder
+    from hvac_simulation.tess_control.kpi import HVAC_KPI
+    from hvac_simulation.tess_control.tess_control import TESSControl
 
     BOPTEST_URL = 'http://127.0.0.1'
     return (
@@ -185,7 +185,7 @@ def _(
     warmup_days,
 ):
     customer_parameters = {
-            "K_hvac": 10, #K_hvac.value,
+            "K_hvac": 3, #K_hvac.value,
             "desired_temp": 70 #desired_soc.value
     }
     market_parameters  = {
@@ -207,9 +207,9 @@ def _(
         duration_hours=simul_hours,
         warmup_period=warmup_days*24,
         market_interval=control_step,
-        avaialble_control_inputs=["oveHeaPumY_activate", "oveHeaPumY_u", "oveTSet_u", "oveTSet_activate"],
-        control_default_values=[0, None, 294.261, 1],
-        control_dr_values=[1, 0, 0, None]
+        # avaialble_control_inputs=["oveHeaPumY_activate", "oveHeaPumY_u", "oveTSet_u", "oveTSet_activate"],
+        # control_default_values=[0, 0, 294.261, 1],
+        # control_dr_values=[1, 0, 0, None]
     )
     tess_simul.set_hvac_customer_parameters(customer_parameters)
     tess_simul.set_hvac_market_parameters(market_parameters)
@@ -224,15 +224,24 @@ def _(
 
 @app.cell
 def _(control_step, np, simul_hours, tess_simul):
-    market_expected_mean_price = np.ones(int((simul_hours * 3600) / control_step))*50 + (np.mean(tess_simul.forecasted_data["TDryBul"]) - tess_simul.forecasted_data["TDryBul"])[0:-1] + np.random.normal(0, 0.5, int((simul_hours * 3600) / control_step))
-    market_expected_mean_price = np.ones(int((simul_hours * 3600) / control_step))*50 #+ (np.mean(tess_simul.forecasted_data["TDryBul"]) - tess_simul.forecasted_data["TDryBul"])[0:-1] + np.random.normal(0, 0.5, int((simul_hours * 3600) / control_step))
-    market_expected_std_price = np.ones(int((simul_hours * 3600) / control_step))*10 + ((np.mean(tess_simul.forecasted_data["TDryBul"]) - tess_simul.forecasted_data["TDryBul"])[0:-1])/5
-    market_expected_std_price = np.ones(int((simul_hours * 3600) / control_step))*10 #+ ((np.mean(tess_simul.forecasted_data["TDryBul"]) - tess_simul.forecasted_data["TDryBul"])[0:-1])/5
-    market_cleared_price = np.ones(int((simul_hours * 3600) / control_step))*50 - (np.mean(tess_simul.forecasted_data["TDryBul"]) - tess_simul.forecasted_data["TDryBul"])[0:-1]
+    timesteps = int((simul_hours * 3600) / control_step)
+    one_array = np.ones(timesteps)
+    outdoor_temp = tess_simul.forecasted_data["TDryBul"]
+    temp_deviations = (np.mean(outdoor_temp) - outdoor_temp)
+
+    market_cleared_price =one_array*50 + temp_deviations
+
+    market_expected_mean_price = market_cleared_price
+    market_expected_std_price = temp_deviations/np.linalg.norm(temp_deviations)*1
+    market_expected_std_price = market_expected_mean_price*0.01
     return (
         market_cleared_price,
         market_expected_mean_price,
         market_expected_std_price,
+        one_array,
+        outdoor_temp,
+        temp_deviations,
+        timesteps,
     )
 
 
@@ -241,18 +250,47 @@ def _(
     market_cleared_price,
     market_expected_mean_price,
     market_expected_std_price,
-    tess_simul,
+    plt,
+    timesteps,
 ):
+    # Plotting the values
+    plt.figure(figsize=(18, 15/3))
+    plt.plot(market_expected_mean_price, label="Market Expected Mean Price", color='blue')
+    plt.fill_between(range(timesteps), market_expected_mean_price - market_expected_std_price, market_expected_mean_price + market_expected_std_price, color='blue', alpha=0.2, label="Price Range (Std Dev)")
+    plt.plot(market_cleared_price, label="Market Cleared Price", color='red')
+
+    # Labels and Title
+    plt.title("Market Prices with Expected Mean and Cleared Price")
+    plt.xlabel("Time Steps")
+    plt.ylabel("Price")
+    plt.legend()
+
+    # Show plot
+    plt.tight_layout()
+    plt.gcf()
+    return
+
+
+@app.cell
+def _(market_cleared_price, market_expected_mean_price, tess_simul):
     simul_result = tess_simul.run_tess_simulation(
         market_expected_mean_price,
-        market_expected_std_price,
+        market_expected_mean_price,
         market_cleared_price
     )
     return (simul_result,)
 
 
 @app.cell
-def _(customer_parameters, market_cleared_price, plt, tess_simul):
+def _(
+    customer_parameters,
+    market_cleared_price,
+    np,
+    plt,
+    simul_result,
+    tess_simul,
+):
+    simul_result
     tess_simul.control_list["on"] = tess_simul.control_list["mode"] != "off"
     subset = 100
     plt.rcParams.update(
@@ -266,6 +304,7 @@ def _(customer_parameters, market_cleared_price, plt, tess_simul):
             "axes.edgecolor": "black",
         }
     )
+    legend_loc="lower right"
     fig, ax = plt.subplots(3, 1, figsize=(18, 15), sharex=True)
     ax[0].plot(
         tess_simul.simulation_results["datetime"][:subset],
@@ -273,10 +312,12 @@ def _(customer_parameters, market_cleared_price, plt, tess_simul):
         label="Air Temp"
     )
     for i in range(1, len(tess_simul.control_list["datetime"][:subset])):
-        if tess_simul.control_list['on'].iloc[i] == 1:
-            ax[0].axvspan(tess_simul.control_list['datetime'].iloc[i-1], tess_simul.control_list['datetime'].iloc[i], color='gray', alpha=0.3)
+        if tess_simul.control_list['mode'].iloc[i] == "heating":
+            ax[0].axvspan(tess_simul.control_list['datetime'].iloc[i-1], tess_simul.control_list['datetime'].iloc[i], color='orange', alpha=0.3, ec=None)
+        if tess_simul.control_list['mode'].iloc[i] == "cooling":
+            ax[0].axvspan(tess_simul.control_list['datetime'].iloc[i-1], tess_simul.control_list['datetime'].iloc[i], color='lightblue', alpha=0.3, ec=None)
     ax[0].axhline(y=customer_parameters["desired_temp"], color='r', linestyle='--', label="Desired Temp")
-    ax[0].legend(loc="upper left")
+    ax[0].legend(loc=legend_loc)
     ax[0].set_ylabel("Zone Temperature (F)")
     ax[0].set_xlabel("Time")
 
@@ -291,72 +332,43 @@ def _(customer_parameters, market_cleared_price, plt, tess_simul):
         tess_simul.simulation_results["reaPFan_y"][:subset],
         label="Fan Power"
     )
-    ax[1].legend(loc="upper left")
+    ax[1].legend(loc=legend_loc)
     ax[1].set_ylabel("Power (W)")
     ax[1].set_xlabel("Time")
 
     # plot market clearing price
     ax[2].plot(
-        tess_simul.simulation_results["datetime"][1:subset],
+        tess_simul.simulation_results["datetime"][:subset],
         market_cleared_price[:subset],
         label="Cleared Price"
     )
+    ax[2].plot(
+        tess_simul.tess_results["datetime"][:subset],
+        tess_simul.tess_results["price"][:subset],    
+        label="Bid Price"
+    )
+    ax[2].fill_between(
+        tess_simul.tess_results["datetime"][:subset],
+        market_cleared_price[:subset],
+        np.maximum(market_cleared_price[:subset], tess_simul.tess_results["price"][:subset]),
+        color="orange",
+        alpha=0.5
+    )
     ax[2].set_ylabel("Cleared Price ($/MWh)")
     ax[2].set_xlabel("Time")
-
-    return ax, fig, i, subset
-
-
-@app.cell
-def _():
-    # tess_simul.control_list["on"] = tess_simul.control_list["mode"] != "off"
-    # plt.figure(figsize=(20,5))
-    # subset = 100
-    # plt.plot(
-    #     tess_simul.simulation_results["datetime"][:subset],
-    #     ((tess_simul.simulation_results["reaTZon_y"] - 273.15)*9/5 + 32)[:subset],
-    #     label="Air Temp"
-    # )
-    # # plt.plot(
-    # #     tess_simul.simulation_results["datetime"][:subset],
-    # #     ((tess_simul.simulation_results["weaSta_reaWeaTDryBul_y"] - 273.15)*9/5 + 32)[:subset],
-    # #     label="Outdoor Air Temp"
-    # # )
-    # for i in range(1, len(tess_simul.control_list["datetime"][:subset])):
-    #     if tess_simul.control_list['on'].iloc[i] == 1:
-    #         plt.axvspan(tess_simul.control_list['datetime'].iloc[i-1], tess_simul.control_list['datetime'].iloc[i], color='gray', alpha=0.3)
-    # # plt.step(
-    # #     tess_simul.simulation_results["datetime"][0:subset],
-    # #     ((tess_simul.simulation_results["con_oveTSetCoo_u"] - 273.15)*9/5 + 32)[0:subset],
-    # #     label="Cooling Setpoint"
-    # # )
-    # # plt.step(
-    # #     tess_simul.simulation_results["datetime"][:subset],
-    # #     ((tess_simul.simulation_results["con_oveTSetHea_u"] - 273.15)*9/5 + 32)[:subset],
-    # #     label="Heating Setpoint"
-    # # )
-    # plt.axhline(y=customer_parameters["desired_temp"], color='r', linestyle='--', label="Desired Temp")
-    # plt.legend(loc="upper left")
-    # plt.ylabel("Zone Temperature")
-    # plt.xlabel("Time")
-    return
+    ax[2].legend(loc=legend_loc)
+    return ax, fig, i, legend_loc, subset
 
 
 @app.cell
-def _(market_cleared_price, plt, subset, tess_simul):
-    plt.figure(figsize=(20,5))
-    plt.plot(
-        tess_simul.simulation_results["datetime"][1:subset],
-        market_cleared_price[:subset],
-        label="Air Temp"
-    )
-    plt.ylabel("Market Cleared Price ($/MWh)")
-    plt.xlabel("Time")
-    return
-
-
-@app.cell
-def _(HVAC_KPI, control_step, customer_parameters, tess_simul):
+def _(
+    HVAC_KPI,
+    control_step,
+    customer_parameters,
+    simul_result,
+    tess_simul,
+):
+    simul_result
     kpi = HVAC_KPI(tess_simul.simulation_results,
                    control_step=control_step,
                    heating_power_variable="reaPHeaPum_y",
@@ -367,17 +379,26 @@ def _(HVAC_KPI, control_step, customer_parameters, tess_simul):
 
 
 @app.cell
-def _(kpi, mo):
+def _(kpi, mo, pd):
+    kpi_values = {
+        'Energy Consumption (kWh)': kpi.calculate_energy_consumption()/1000,
+        'Peak Power (kW)': kpi.calculate_peak_power()/1000,
+        'Temperature Discomfort': kpi.calculate_temperature_discomfort(),
+        'Average Heating Cycles per hour': kpi.calculate_cycles(kpi.heating_power_variable)['average_cycles_per_hour']
+    }
+    kpi_df = pd.DataFrame.from_dict(kpi_values, orient='index', columns=['Value'])
+    kpi_df.index.name = 'KPI'
+
     mo.md(
     f"""
     ### HVAC KPI values
-    - **Energy Consumption (kWh):** {kpi.calculate_energy_consumption()/1000:.2f}
-    - **Peak Power (kW):** {kpi.calculate_peak_power()/1000:.2f}
-    - **Temperature Discomfort:** {kpi.calculate_temperature_discomfort():.3f}
-    - **Average Heating Cycles per hour:** {kpi.calculate_cycles(kpi.heating_power_variable)['average_cycles_per_hour']:.2f}
+    - **Energy Consumption (kWh):** {kpi_values['Energy Consumption (kWh)']:.2f}
+    - **Peak Power (kW):** {kpi_values['Peak Power (kW)']:.2f}
+    - **Temperature Discomfort:** {kpi_values['Temperature Discomfort']:.3f}
+    - **Average Heating Cycles per hour:** {kpi_values['Average Heating Cycles per hour']:.2f}
     """
     )
-    return
+    return kpi_df, kpi_values
 
 
 @app.cell
@@ -396,10 +417,21 @@ def _(bt_instance, mo, stop_simulation):
     if stop_simulation.value:
         bt_instance.stop()
         output = mo.md(f"""
-        ## Simulation Stopped
+        ## Simulation Stopped, You can Restart
         """)
     output
     return (output,)
+
+
+@app.cell
+def _():
+    # rerun_simulation = mo.ui.run_button(
+    #     kind="neutral",
+    #     label="Re Run Simulation",
+    #     disabled=not(stop_simulation.value)
+    # )
+    # rerun_simulation
+    return
 
 
 if __name__ == "__main__":
